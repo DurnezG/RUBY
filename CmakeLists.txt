@@ -1,0 +1,117 @@
+cmake_minimum_required(VERSION 3.27)
+project(RUBY)
+
+include(FetchContent)
+
+# Use C++20
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+FetchContent_Declare(
+    GLM
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 1.0.1
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE)
+FetchContent_MakeAvailable(GLM)
+
+find_package(Vulkan REQUIRED)
+
+FetchContent_Declare(
+    VMA
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+    GIT_TAG master  # or a specific tag/commit
+)
+FetchContent_MakeAvailable(VMA)
+
+Set( SRC_INCLUDES
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    ${vma_SOURCE_DIR}/include
+)
+
+set( SRC_FILES
+    "src/RUBY.cpp"
+    "src/Vulkan/IBasePass.cpp" 
+    "src/Vulkan/IRubyWindow.cpp"
+    "src/Vulkan/Instance.cpp"
+    "src/Vulkan/Device.cpp"
+    "src/Vulkan/CommandPool.cpp"
+    "src/Vulkan/Swapchain.cpp"
+    "src/Vulkan/Buffer.cpp"
+    "src/Vulkan/Image.cpp"
+    "src/Vulkan/Pipeline.cpp"
+    
+    "src/Vulkan/DescriptorPool.cpp"
+    "src/Vulkan/Shader.cpp"
+     
+    )
+
+add_library(${PROJECT_NAME} STATIC ${SRC_FILES})
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${SRC_INCLUDES})
+
+target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan glm::glm)
+
+if(NOT Vulkan_FOUND)
+    message(FATAL_ERROR "Vulkan not found yet, cannot compile shaders!")
+endif()
+
+
+# +-----------------------------+
+# |     SHADER COMPILATION      |
+# +-----------------------------+
+
+# Find the glslc executable
+find_program(GLSLC_EXECUTABLE glslc HINTS "${Vulkan_GLSLC_EXECUTABLE}")
+if(NOT GLSLC_EXECUTABLE)
+    message(FATAL_ERROR "glslc not found! Make sure Vulkan SDK is installed and available in PATH.")
+else()
+    message("glslc.exe found at ${GLSLC_EXECUTABLE}")
+endif()
+
+# Set shader directories
+set(SHADER_SOURCE_DIR ${CMAKE_SOURCE_DIR}/shaders)
+set(SHADER_BINARY_DIR ${CMAKE_BINARY_DIR}/project/shaders)
+file(MAKE_DIRECTORY ${SHADER_BINARY_DIR})
+
+# Shader Files
+file(GLOB SHADER_SOURCES
+  ${SHADER_SOURCE_DIR}/*.vert
+  ${SHADER_SOURCE_DIR}/*.frag
+)
+
+#compile the shaders
+#add_custom_target(CompileShaders ALL COMMENT "Compiling shaders to output directory.")
+#foreach(SHADER ${SHADER_SOURCES})
+#    get_filename_component(SHADER_INPUT_NAME ${SHADER} NAME)
+#    string(REPLACE "." "_" SHADER_OUTPUT_NAME ${SHADER_INPUT_NAME})
+#    set(SHADER_OUTPUT_DIR "${CMAKE_BINARY_DIR}/project/shaders/${SHADER_OUTPUT_NAME}.spv")
+#
+#    message("Compiling ${SHADER_INPUT_NAME} to ${SHADER_OUTPUT_NAME}.spv")
+#
+#    add_custom_command(
+#        TARGET CompileShaders POST_BUILD
+#        COMMAND ${GLSLC_EXECUTABLE} ${SHADER} -o ${SHADER_OUTPUT_DIR} -I ${CMAKE_SOURCE_DIR}/shaders
+#        DEPENDS ${SHADER}
+#        COMMENT "Compiling ${SHADER_INPUT_NAME} to ${SHADER_OUTPUT_NAME}.spv"
+#        VERBATIM
+#    )
+#endforeach()
+#
+## Add CompileShaders as a dependency to project
+#add_dependencies(${TARGET_NAME} CompileShaders)
+#
+## Copying the textures folder to the output directory
+#add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E copy_directory
+#            ${CMAKE_SOURCE_DIR}/textures
+#            $<TARGET_FILE_DIR:${TARGET_NAME}>/textures
+#    COMMENT "Copying textures to output directory"
+#)
+#
+#add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E copy_directory
+#            ${CMAKE_SOURCE_DIR}/models
+#            $<TARGET_FILE_DIR:${TARGET_NAME}>/models
+#    COMMENT "Copying models to output directory"
+#)
