@@ -182,6 +182,12 @@ namespace RUBY
         return *this;
     }
 
+    PipelineBuilder& PipelineBuilder::SetColorAttachmentFormats(const std::vector<VkFormat>& formats)
+    {
+        m_ColorFormats = formats;
+        return *this;
+    }
+
     Pipeline PipelineBuilder::Build(Device* device, SwapChain* swapChain, DescriptorPool* descriptorPool)
     {
         // Ensure rendering info has correct attachment formats from swapchain

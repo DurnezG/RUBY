@@ -64,6 +64,7 @@ namespace RUBY
         PipelineBuilder& SetDynamicState(const VkPipelineDynamicStateCreateInfo& dynamicState);
         PipelineBuilder& SetRenderingInfo(const VkPipelineRenderingCreateInfo& renderingInfo);
         PipelineBuilder& AddPushConstant(const VkPushConstantRange& pushConstant);
+        PipelineBuilder& SetColorAttachmentFormats(const std::vector<VkFormat>& formats);
 
         Pipeline Build(Device* device, SwapChain* swapChain, DescriptorPool* descriptorPool);
 
@@ -89,5 +90,6 @@ namespace RUBY
         std::vector<VkPipelineColorBlendAttachmentState> m_ColorBlendAttachments;
         std::vector<VkDynamicState> m_DynamicStates;
         std::vector<VkFormat> m_ColorAttachmentFormats;
+        std::vector<VkFormat> m_ColorFormats;
     };
 }
