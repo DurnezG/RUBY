@@ -14,17 +14,21 @@ RUBY::Shader::Shader(Device* pDevice, const std::string& filePath, VkShaderStage
 RUBY::Shader::Shader(Shader&& other) noexcept
 {
     m_pDevice = other.m_pDevice;
+    m_Stage = other.m_Stage;
 
     m_ShaderModule = other.m_ShaderModule;
     other.m_ShaderModule = VK_NULL_HANDLE;
+    other.m_Stage = {};
 }
 
 RUBY::Shader& RUBY::Shader::operator=(Shader&& other) noexcept
 {
     m_pDevice = other.m_pDevice;
+    m_Stage = other.m_Stage;
 
     m_ShaderModule = other.m_ShaderModule;
     other.m_ShaderModule = VK_NULL_HANDLE;
+    other.m_Stage = {};
 
     return *this;
 }
@@ -67,7 +71,7 @@ std::vector<char> RUBY::Shader::ReadFile(const std::string& filePath)
 
     if (!file.is_open())
     {
-        throw std::runtime_error("failed to open file!");
+        throw std::runtime_error("Failed to open shader file: " + filePath);
     }
 
     size_t fileSize = (size_t)file.tellg();

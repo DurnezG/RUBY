@@ -1,34 +1,37 @@
 #pragma once
 #include <vector>
 
-#include <vulkan/vulkan_core.h>
-
 #include "Vulkan/CommandPool.h"
-#include "Vulkan/IBasePass.h"
+//#include "Vulkan/IBasePass.h"
 #include "Vulkan/Device.h"
 #include "Vulkan/SwapChain.h"
 
 namespace RUBY
 {
+	class DemoPass;
 	class RUBY
 	{
 	public:
 		RUBY(IRubyWindow* pWindow);
 		~RUBY();
 
+		Device& GetDevice() { return m_Device; }
+		SwapChain& GetSwapChain() { return m_SwapChain; }
+		CommandPool& GetCommandPool() { return m_CommandPool; }
+
+		uint32_t GetCurrentFrame() const { return m_CurrentFrame; }
+
 		void Render();
 
+		//void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+	private:
 		bool BeginFrame(uint32_t& outImageIndex);
-		void UpdateBuffers();
-		void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void EndFrame(uint32_t imageIndex);
 		void RecreateSwapChain();
 
-	private:
-		VkSampler CreateTextureSampler();
 
-		void CreateSyncObjects();
-
+		//VkSampler CreateTextureSampler();
 
 		IRubyWindow* m_pWindow;
 
@@ -36,14 +39,7 @@ namespace RUBY
 		CommandPool m_CommandPool{ &m_Device };
 		SwapChain m_SwapChain{ m_pWindow, &m_Device, &m_CommandPool };
 
-		VkSampler m_TextureSampler{ CreateTextureSampler() };
-
-
-		std::vector<IBasePass> m_Passes;
-
-		std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-		std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-		std::vector<VkFence> m_InFlightFences;
+		std::unique_ptr<DemoPass> m_TrianglePass;
 
 		bool m_FramebufferResized = false;
 		uint32_t m_CurrentFrame = 0;

@@ -2,47 +2,43 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-#include "CommandPool.h"
 #include "Device.h"
 
 namespace RUBY
 {
-	class DescriptorPool
-	{
-	public:
+    class DescriptorPool
+    {
+    public:
+        struct DescriptorSetLayoutData
+        {
+            std::vector<VkDescriptorSetLayoutBinding> bindings{};
+        };
 
-		struct DescriptorSetLayoutData
-		{
-			std::vector<VkDescriptorSetLayoutBinding>	bindings{};
-			VkDescriptorSetLayoutCreateInfo				info{};
-		};
+        DescriptorPool(Device* pDevice,
+                       const std::vector<DescriptorSetLayoutData>& layoutDatas,
+                       const std::vector<VkDescriptorPoolSize>& poolSizes,
+                       uint32_t maxSets = MAX_POOL_RESERVE);
 
-		DescriptorPool(Device* pDevice, const std::vector<VkDescriptorSetLayout>& layoutInfos);
+        DescriptorPool(const DescriptorPool& other) = delete;
+        DescriptorPool(DescriptorPool&& other) noexcept = delete;
+        DescriptorPool& operator=(const DescriptorPool& other) = delete;
+        DescriptorPool& operator=(DescriptorPool&& other) noexcept = delete;
 
-		DescriptorPool(const DescriptorPool& other) = delete;
-		DescriptorPool(DescriptorPool&& other) noexcept = delete;
-		DescriptorPool& operator=(const DescriptorPool& other) = delete;
-		DescriptorPool& operator=(DescriptorPool&& other) noexcept = delete;
+        ~DescriptorPool();
 
-		~DescriptorPool();
+        const VkDescriptorSetLayout& GetDescriptorSetLayout(int index) const;
+        const std::vector<VkDescriptorSetLayout>& GetDescriptorSetLayouts() const;
+        const VkDescriptorPool& GetDescriptorPool() const;
 
-		void SetDescriptorSetPool(VkDescriptorPool poolInfo);
+        static constexpr uint32_t MAX_POOL_RESERVE = 512;
 
-		const VkDescriptorSetLayout& GetDescriptorSetLayout(int index) const;
-		const std::vector<VkDescriptorSetLayout>& GetDescriptorSetLayouts() const;
-		const VkDescriptorPool& GetDescriptorPool() const;
-		
+    private:
+        void CreateDescriptorSetLayouts(const std::vector<DescriptorSetLayoutData>& layoutDatas);
+        void CreateDescriptorPool(const std::vector<VkDescriptorPoolSize>& poolSizes, uint32_t maxSets);
 
+        Device* m_pDevice{};
 
-		static constexpr uint32_t MAX_POOL_RESERVE = 512;
-	private:
-
-		void CreateDescriptorSetLayouts(const std::vector<VkDescriptorSetLayout>& layoutInfos);
-		void CreateDescriptorPool( VkDescriptorPool poolInfo);
-
-		Device* m_pDevice{};
-
-		VkDescriptorPool m_DescriptorPool{};
-		std::vector<VkDescriptorSetLayout> m_DescriptorSetLayouts{};
-	};
+        VkDescriptorPool m_DescriptorPool{VK_NULL_HANDLE};
+        std::vector<VkDescriptorSetLayout> m_DescriptorSetLayouts{};
+    };
 }

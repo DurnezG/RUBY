@@ -45,8 +45,15 @@ void RUBY::CommandPool::EndSingleTimeCommands(VkCommandBuffer commandBuffer) con
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &commandBuffer;
 
+	VkFenceCreateInfo fenceInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+	VkFence fence;
+	vkCreateFence(m_pDevice->GetLogicalDevice(), &fenceInfo, nullptr, &fence);
+
 	vkQueueSubmit(m_pDevice->GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(m_pDevice->GetGraphicsQueue());
+	vkWaitForFences(m_pDevice->GetLogicalDevice(), 1, &fence, VK_TRUE, UINT64_MAX);
+
+	vkDestroyFence(m_pDevice->GetLogicalDevice(), fence, nullptr);
+	//vkQueueWaitIdle(m_pDevice->GetGraphicsQueue());
 
 	vkFreeCommandBuffers(m_pDevice->GetLogicalDevice(), m_CommandPool, 1, &commandBuffer);
 }
@@ -60,10 +67,17 @@ void RUBY::CommandPool::CreateCommandPool()
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
 
-	if (vkCreateCommandPool(m_pDevice->GetLogicalDevice(), &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+	VkResult result = vkCreateCommandPool(m_pDevice->GetLogicalDevice(), &poolInfo, nullptr, &m_CommandPool);
+	if ( result != VK_SUCCESS)
 	{
-		throw std::runtime_error("Failed to create command pool!");
+		throw std::runtime_error("Failed to create command pool (VkResult=" + std::to_string(result) + ")");
 	}
+
+	m_pDevice->GetDebugger().SetDebugName(
+		reinterpret_cast<uint64_t>(m_CommandPool),
+		"Main Command Pool",
+		VK_OBJECT_TYPE_COMMAND_POOL
+	);
 }
 
 void RUBY::CommandPool::CreateCommandBuffers()

@@ -3,11 +3,16 @@
 #include <set>
 #include <stdexcept>
 
-#define VMA_IMPLEMENTATION
 #include <fstream>
 #include <map>
 #include <vector>
 
+
+#ifndef VMA_IMPLEMENTATION
+#define VMA_IMPLEMENTATION
+#endif
+
+#include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
 
 RUBY::Device::Device(IRubyWindow* window)
@@ -24,13 +29,13 @@ RUBY::Device::~Device()
 {
     delete m_pDebugger;
     /* Debugging VMA */
-    char* StatsString = nullptr;
-    vmaBuildStatsString(m_Allocator, &StatsString, true);
-    {
-        std::ofstream OutStats{ "VmaStats.json" };
-        OutStats << StatsString;
-    }
-    vmaFreeStatsString(m_Allocator, StatsString);
+    //char* StatsString = nullptr;
+    //vmaBuildStatsString(m_Allocator, &StatsString, true);
+    //{
+    //    std::ofstream OutStats{ "VmaStats.json" };
+    //    OutStats << StatsString;
+    //}
+    //vmaFreeStatsString(m_Allocator, StatsString);
     /* END - Debugging VMA */
 
 	vmaDestroyAllocator(m_Allocator);

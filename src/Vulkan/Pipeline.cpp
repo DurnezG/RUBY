@@ -1,9 +1,7 @@
 #include "Vulkan/Pipeline.h"
 
-#include <array>
 #include <stdexcept>
-
-#include "Vulkan/Shader.h"
+#include <utility>
 
 namespace RUBY
 {
@@ -21,31 +19,31 @@ namespace RUBY
         const VkPipelineDepthStencilStateCreateInfo& depthStencil,
         const VkPipelineColorBlendStateCreateInfo& colorBlending,
         const VkPipelineDynamicStateCreateInfo& dynamicState,
-        const VkPipelineRenderingCreateInfo& renderingInfo,
+        VkPipelineRenderingCreateInfo renderingInfo,
         const std::vector<VkPushConstantRange>& pushConstants)
         : m_Device(device), m_SwapChain(swapChain), m_DescriptorPool(descriptorPool)
     {
-        // --- Pipeline Layout ---
+        // Create pipeline layout (use ALL descriptor set layouts from the DescriptorPool)
         VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 
-        VkDescriptorSetLayout descriptorSetLayout = descriptorPool->GetDescriptorSetLayout(0);
-        pipelineLayoutInfo.setLayoutCount = (descriptorSetLayout != VK_NULL_HANDLE) ? 1 : 0;
-        pipelineLayoutInfo.pSetLayouts = (descriptorSetLayout != VK_NULL_HANDLE) ? &descriptorSetLayout : nullptr;
+        const auto& setLayouts = descriptorPool->GetDescriptorSetLayouts();
+        pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+        pipelineLayoutInfo.pSetLayouts = setLayouts.empty() ? nullptr : setLayouts.data();
 
         pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size());
-        pipelineLayoutInfo.pPushConstantRanges = pushConstants.data();
+        pipelineLayoutInfo.pPushConstantRanges = pushConstants.empty() ? nullptr : pushConstants.data();
 
         if (vkCreatePipelineLayout(device->GetLogicalDevice(), &pipelineLayoutInfo, nullptr, &m_Layout) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create pipeline layout!");
         }
 
-        // --- Graphics Pipeline ---
+        // Build graphics pipeline create info (using dynamic rendering via pNext)
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-        pipelineInfo.pStages = shaderStages.data();
+        pipelineInfo.pStages = shaderStages.empty() ? nullptr : shaderStages.data();
         pipelineInfo.pVertexInputState = &vertexInput;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;
@@ -56,20 +54,17 @@ namespace RUBY
         pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = m_Layout;
 
-        // NOTE: Using dynamic rendering, no renderPass needed
+        // No renderPass when using dynamic rendering
         pipelineInfo.renderPass = VK_NULL_HANDLE;
         pipelineInfo.subpass = 0;
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
         pipelineInfo.basePipelineIndex = -1;
 
+        // Hook up rendering info via pNext
         pipelineInfo.pNext = &renderingInfo;
 
-        if (vkCreateGraphicsPipelines(device->GetLogicalDevice(),
-            VK_NULL_HANDLE,
-            1,
-            &pipelineInfo,
-            nullptr,
-            &m_Pipeline) != VK_SUCCESS)
+        VkPipelineCache pipelineCache = VK_NULL_HANDLE; // optional: supply a cache if you have one
+        if (vkCreateGraphicsPipelines(device->GetLogicalDevice(), pipelineCache, 1, &pipelineInfo, nullptr, &m_Pipeline) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create graphics pipeline!");
         }
@@ -84,27 +79,38 @@ namespace RUBY
     {
         if (this != &other)
         {
+            // Destroy existing
+            if (m_Layout != VK_NULL_HANDLE && m_Device)
+            {
+                vkDestroyPipelineLayout(m_Device->GetLogicalDevice(), m_Layout, nullptr);
+                m_Layout = VK_NULL_HANDLE;
+            }
+            if (m_Pipeline != VK_NULL_HANDLE && m_Device)
+            {
+                vkDestroyPipeline(m_Device->GetLogicalDevice(), m_Pipeline, nullptr);
+                m_Pipeline = VK_NULL_HANDLE;
+            }
+
             m_Device = other.m_Device;
             m_SwapChain = other.m_SwapChain;
             m_DescriptorPool = other.m_DescriptorPool;
-            m_Pipeline = other.m_Pipeline;
-            m_Layout = other.m_Layout;
-
-            other.m_Pipeline = VK_NULL_HANDLE;
-            other.m_Layout = VK_NULL_HANDLE;
+            m_Pipeline = std::exchange(other.m_Pipeline, VK_NULL_HANDLE);
+            m_Layout = std::exchange(other.m_Layout, VK_NULL_HANDLE);
         }
         return *this;
     }
 
     Pipeline::~Pipeline()
     {
-        if (m_Pipeline != VK_NULL_HANDLE)
-        {
-            vkDestroyPipeline(m_Device->GetLogicalDevice(), m_Pipeline, nullptr);
-        }
-        if (m_Layout != VK_NULL_HANDLE)
+        if (m_Layout != VK_NULL_HANDLE && m_Device)
         {
             vkDestroyPipelineLayout(m_Device->GetLogicalDevice(), m_Layout, nullptr);
+            m_Layout = VK_NULL_HANDLE;
+        }
+        if (m_Pipeline != VK_NULL_HANDLE && m_Device)
+        {
+            vkDestroyPipeline(m_Device->GetLogicalDevice(), m_Pipeline, nullptr);
+            m_Pipeline = VK_NULL_HANDLE;
         }
     }
 
@@ -178,6 +184,16 @@ namespace RUBY
 
     Pipeline PipelineBuilder::Build(Device* device, SwapChain* swapChain, DescriptorPool* descriptorPool)
     {
+        // Ensure rendering info has correct attachment formats from swapchain
+        m_ColorAttachmentFormats.clear();
+        m_ColorAttachmentFormats.push_back(swapChain->GetImageFormat());
+        m_RenderingInfo.colorAttachmentCount = static_cast<uint32_t>(m_ColorAttachmentFormats.size());
+        m_RenderingInfo.pColorAttachmentFormats = m_ColorAttachmentFormats.data();
+
+        // If depth is enabled in depthStencil, set depthAttachmentFormat accordingly (optional)
+        // VkFormat depthFmt = device->FindDepthFormat();
+        // m_RenderingInfo.depthAttachmentFormat = depthFmt;
+
         return Pipeline(device,
             swapChain,
             descriptorPool,
@@ -198,100 +214,65 @@ namespace RUBY
     {
         PipelineBuilder builder{};
 
-        // --- Vertex Input (no vertices for now, e.g. fullscreen triangle/quad) ---
-        VkPipelineVertexInputStateCreateInfo vertexInput{};
-        vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        builder.m_VertexInput = vertexInput;
+        // Vertex input (empty)
+        builder.m_VertexInput = VkPipelineVertexInputStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
 
-        // --- Input Assembly ---
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        inputAssembly.primitiveRestartEnable = VK_FALSE;
-        builder.m_InputAssembly = inputAssembly;
+        // Input assembly
+        builder.m_InputAssembly = VkPipelineInputAssemblyStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+        builder.m_InputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        builder.m_InputAssembly.primitiveRestartEnable = VK_FALSE;
 
-        // --- Viewport + Scissor ---
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(width);
-        viewport.height = static_cast<float>(height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
+        // Owned viewport/scissor
+        builder.m_Viewports = { VkViewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f} };
+        builder.m_Scissors = { VkRect2D{ {0,0}, { width, height } } };
 
-        VkRect2D scissor{};
-        scissor.offset = { 0, 0 };
-        scissor.extent = { width, height };
+        builder.m_ViewportState = VkPipelineViewportStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+        builder.m_ViewportState.viewportCount = static_cast<uint32_t>(builder.m_Viewports.size());
+        builder.m_ViewportState.pViewports = builder.m_Viewports.data();
+        builder.m_ViewportState.scissorCount = static_cast<uint32_t>(builder.m_Scissors.size());
+        builder.m_ViewportState.pScissors = builder.m_Scissors.data();
 
-        VkPipelineViewportStateCreateInfo viewportState{};
-        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewportState.viewportCount = 1;
-        viewportState.pViewports = &viewport;
-        viewportState.scissorCount = 1;
-        viewportState.pScissors = &scissor;
-        builder.m_ViewportState = viewportState;
+        // Rasterizer
+        builder.m_Rasterizer = VkPipelineRasterizationStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+        builder.m_Rasterizer.depthClampEnable = VK_FALSE;
+        builder.m_Rasterizer.rasterizerDiscardEnable = VK_FALSE;
+        builder.m_Rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        builder.m_Rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+        builder.m_Rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        builder.m_Rasterizer.lineWidth = 1.0f;
 
-        // --- Rasterizer ---
-        VkPipelineRasterizationStateCreateInfo rasterizer{};
-        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer.depthClampEnable = VK_FALSE;
-        rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer.lineWidth = 1.0f;
-        rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-        rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // depends on your convention
-        rasterizer.depthBiasEnable = VK_FALSE;
-        builder.m_Rasterizer = rasterizer;
+        // Multisampling
+        builder.m_Multisampling = VkPipelineMultisampleStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+        builder.m_Multisampling.sampleShadingEnable = VK_FALSE;
+        builder.m_Multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-        // --- Multisampling ---
-        VkPipelineMultisampleStateCreateInfo multisampling{};
-        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        builder.m_Multisampling = multisampling;
+        // Depth/stencil default disabled
+        builder.m_DepthStencil = VkPipelineDepthStencilStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+        builder.m_DepthStencil.depthTestEnable = VK_FALSE;
+        builder.m_DepthStencil.depthWriteEnable = VK_FALSE;
+        builder.m_DepthStencil.depthCompareOp = VK_COMPARE_OP_ALWAYS;
 
-        // --- Depth/Stencil (disabled for now) ---
-        VkPipelineDepthStencilStateCreateInfo depthStencil{};
-        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencil.depthTestEnable = VK_FALSE;
-        depthStencil.depthWriteEnable = VK_FALSE;
-        depthStencil.depthCompareOp = VK_COMPARE_OP_ALWAYS;
-        depthStencil.depthBoundsTestEnable = VK_FALSE;
-        depthStencil.stencilTestEnable = VK_FALSE;
-        builder.m_DepthStencil = depthStencil;
+        // Color blending (owned attachment)
+        builder.m_ColorBlendAttachments = { VkPipelineColorBlendAttachmentState{} };
+        builder.m_ColorBlendAttachments[0].blendEnable = VK_FALSE;
+        builder.m_ColorBlendAttachments[0].colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
-        // --- Color Blending ---
-        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-            VK_COLOR_COMPONENT_G_BIT |
-            VK_COLOR_COMPONENT_B_BIT |
-            VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = VK_FALSE;
+        builder.m_ColorBlending = VkPipelineColorBlendStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+        builder.m_ColorBlending.logicOpEnable = VK_FALSE;
+        builder.m_ColorBlending.attachmentCount = static_cast<uint32_t>(builder.m_ColorBlendAttachments.size());
+        builder.m_ColorBlending.pAttachments = builder.m_ColorBlendAttachments.data();
 
-        VkPipelineColorBlendStateCreateInfo colorBlending{};
-        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.logicOpEnable = VK_FALSE;
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachment;
-        builder.m_ColorBlending = colorBlending;
+        // Dynamic state (owned)
+        builder.m_DynamicStates = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+        builder.m_DynamicState = VkPipelineDynamicStateCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+        builder.m_DynamicState.dynamicStateCount = static_cast<uint32_t>(builder.m_DynamicStates.size());
+        builder.m_DynamicState.pDynamicStates = builder.m_DynamicStates.data();
 
-        // --- Dynamic State (viewport/scissor can be overridden later) ---
-        static VkDynamicState dynamicStates[] = {
-            VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_SCISSOR
-        };
-        VkPipelineDynamicStateCreateInfo dynamicState{};
-        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicState.dynamicStateCount = 2;
-        dynamicState.pDynamicStates = dynamicStates;
-        builder.m_DynamicState = dynamicState;
-
-        // --- Rendering Info (for dynamic rendering, matches swapchain format) ---
-        VkPipelineRenderingCreateInfo renderingInfo{};
-        renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-        renderingInfo.colorAttachmentCount = 1;
-        // NOTE: You must set renderingInfo.pColorAttachmentFormats later
-        builder.m_RenderingInfo = renderingInfo;
+        // Rendering info: color attachments set by Build()
+        builder.m_RenderingInfo = VkPipelineRenderingCreateInfo{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+        builder.m_RenderingInfo.colorAttachmentCount = 0;
+        builder.m_RenderingInfo.pColorAttachmentFormats = nullptr;
 
         return builder;
     }

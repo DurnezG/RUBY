@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 RUBY::Instance::Instance(IRubyWindow* pWindow)
 	: m_pWindow(pWindow)
@@ -12,7 +13,7 @@ RUBY::Instance::Instance(IRubyWindow* pWindow)
 
 RUBY::Instance::~Instance()
 {
-    if (m_EnableValidationLayers)
+    if (m_EnableValidationLayers && m_vkDebugMessenger != VK_NULL_HANDLE)
     {
         DestroyDebugUtilsMessengerEXT(m_vkDebugMessenger, nullptr);
     }
@@ -31,40 +32,20 @@ void RUBY::Instance::CreateInstance()
 
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Hello Triangle";
+    appInfo.pApplicationName = m_pWindow->GetWindowName().c_str();
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "No Engine";
+    appInfo.pEngineName = "RUBY";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_3;
 
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
-
-    uint32_t glfwExtensionCount = 0;
-
+ 
     auto extensions = GetRequiredExtensions();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
-    /*const char** glfwExtensions;
-
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);*/
-
-    //createInfo.enabledExtensionCount = glfwExtensionCount;
-    //createInfo.ppEnabledExtensionNames = glfwExtensions;
-
-    // For SDL
-    // SDL_bool SDL_Vulkan_GetInstanceExtensions(SDL_Window *window, unsigned int* pCount, const char** pNames);
-    if (m_EnableValidationLayers)
-    {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-        createInfo.ppEnabledLayerNames = validationLayers.data();
-    }
-    else
-    {
-        createInfo.enabledLayerCount = 0;
-    }
-
+    
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (m_EnableValidationLayers)
     {
@@ -85,7 +66,7 @@ void RUBY::Instance::CreateInstance()
     VkResult result = vkCreateInstance(&createInfo, nullptr, &m_Instance);
     if (result != VK_SUCCESS)
     {
-        throw std::runtime_error("failed to create a vk instance!");
+        throw std::runtime_error("failed to create a vk instance! Error code: " + std::to_string(result));
     }
 }
 
@@ -134,8 +115,6 @@ bool RUBY::Instance::CheckValidationLayerSupport() const
 
 std::vector<const char*> RUBY::Instance::GetRequiredExtensions() const
 {
-    unsigned int sdlExtensionCount = 0;
-
 	std::vector<const char*> extensions = m_pWindow->GetRequiredInstanceExtensions();
     // Add validation layers if enabled
     if (m_EnableValidationLayers) 
@@ -179,8 +158,8 @@ VkResult RUBY::Instance::CreateDebugUtilsMessengerEXT(const VkDebugUtilsMessenge
 }
 
 VkBool32 RUBY::Instance::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                      VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-                                      void* pUserData)
+                                      VkDebugUtilsMessageTypeFlagsEXT /*messageType*/, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                      void* /*pUserData*/)
 {
     if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
     {

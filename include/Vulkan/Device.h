@@ -4,9 +4,12 @@
 #include <vulkan/vulkan.h>
 
 #include "Instance.h"
-#include "vk_mem_alloc.h"
+
 #include "IRubyWindow.h"
 #include "glm/vec4.hpp"
+
+class VmaAllocator_T;
+using VmaAllocator = VmaAllocator_T*;
 
 namespace RUBY
 {
@@ -113,6 +116,7 @@ namespace RUBY
 		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 		VkFormat FindDepthFormat() const;
 
+		Instance* GetInstance() { return &m_Instance; }
 
 		VkDevice GetLogicalDevice() const { return m_LogicalDevice; }
 		VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }

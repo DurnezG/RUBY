@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 //#define VMA_IMPLEMENTATION
+#include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
 
 #include "Vulkan/CommandPool.h"
@@ -109,49 +110,16 @@ void RUBY::Image::TransitionImageLayout(VkCommandBuffer& commandBuffer, VkFormat
 
 void RUBY::Image::TransitionImageLayout(VkCommandBuffer& commandBuffer, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
 {
-    VkAccessFlags srcAccessMask;
-	VkAccessFlags dstAccessMask;
+    auto info = GetTransitionInfo(oldLayout, newLayout, format);
 
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
-
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-    {
-        srcAccessMask = 0;
-    	dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
-        srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-    {
-        srcAccessMask = 0;
-        dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    }
-    else
-    {
-        throw std::invalid_argument("unsupported layout transition!");
-    }
-
-    TransitionImageLayout(commandBuffer, format, oldLayout, newLayout, srcAccessMask, dstAccessMask, sourceStage, destinationStage);
+    TransitionImageLayout(commandBuffer, format, oldLayout, newLayout,
+        info.srcAccessMask, info.dstAccessMask,
+        info.sourceStage, info.destinationStage);
 }
 
 void RUBY::Image::TransitionImageLayout(VkCommandBuffer& commandBuffer, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout,
 	VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage, VkImageAspectFlags imageAspectFlags)
 {
-
-	m_ImageLayout = newLayout;
 
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -190,6 +158,7 @@ void RUBY::Image::TransitionImageLayout(VkCommandBuffer& commandBuffer, VkFormat
         1, &barrier
     );
 
+	m_ImageLayout = newLayout;
 
 
 }
@@ -278,4 +247,53 @@ void RUBY::Image::CreateImageView(VkFormat format, VkImageAspectFlags aspectFlag
             throw std::runtime_error("failed to create texture image view!");
         }
     }
+}
+
+RUBY::Image::TransitionInfo RUBY::Image::GetTransitionInfo(VkImageLayout oldLayout, VkImageLayout newLayout, VkFormat /*format*/)
+{
+    TransitionInfo info{};
+
+    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) 
+    {
+        info.srcAccessMask = 0;
+        info.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        info.sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        info.destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) 
+    
+	{
+        info.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        info.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        info.sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        info.destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) 
+    {
+        info.srcAccessMask = 0;
+        info.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        info.sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        info.destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
+    else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) 
+    {
+        info.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        info.dstAccessMask = 0;
+        info.sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        info.destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+    else 
+    {
+        // Default: conservative sync
+        info.srcAccessMask = 0;
+        info.dstAccessMask = 0;
+        info.sourceStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        info.destinationStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+#ifdef _DEBUG
+        throw std::invalid_argument("Unsupported layout transition!");
+#endif
+    }
+
+    return info;
 }

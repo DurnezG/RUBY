@@ -3,19 +3,29 @@
 #include <stdexcept>
 
 //#define VMA_IMPLEMENTATION
+#include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
 
-RUBY::Buffer::Buffer(Device* pDevice, CommandPool* pCommandPool, const VkBufferCreateInfo& bufferInfo, const VkMemoryPropertyFlags properties, bool hostAcces)
+RUBY::Buffer::Buffer(Device* pDevice, CommandPool* pCommandPool, const VkBufferCreateInfo& bufferInfo, const VkMemoryPropertyFlags properties, HostAccess hostAcces)
 	: m_pDevice(pDevice), m_pCommandPool(pCommandPool)
 {
 	VmaAllocationCreateInfo allocInfo{};
 	allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	allocInfo.requiredFlags = properties;
 
-	if (hostAcces)
+	switch (hostAcces)
 	{
+	case HostAccess::None:
+		break;
+	case HostAccess::Sequential:
+		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		break;
+	case HostAccess::Random:
 		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+		break;
 	}
+
+	m_Size = bufferInfo.size;
 
 	vmaCreateBuffer(pDevice->GetAllocator(), &bufferInfo, &allocInfo, &m_Buffer, &m_BufferAllocation, nullptr);
 	vmaSetAllocationName(pDevice->GetAllocator(), m_BufferAllocation, "MyBuffer");
@@ -62,5 +72,6 @@ void RUBY::Buffer::CopyBuffer(VkBuffer srcBuffer, VkDeviceSize size) const
 
 void RUBY::Buffer::CopyMemory(void* data, const VkDeviceSize& size, int offset) const
 {
+	assert(offset + size <= m_Size && "CopyMemory out of bounds!");
 	vmaCopyMemoryToAllocation(m_pDevice->GetAllocator(), data, m_BufferAllocation, offset, size);
 }

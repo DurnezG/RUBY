@@ -3,6 +3,9 @@
 
 #include "Vulkan/Device.h"
 
+class VmaAllocation_T;
+using VmaAllocation = VmaAllocation_T*;
+
 namespace RUBY
 {
 	class CommandPool;
@@ -19,6 +22,14 @@ namespace RUBY
 			VkImageUsageFlags usage;
 			VkImageAspectFlags aspectFlags;
 			VkMemoryPropertyFlags properties;
+		};
+
+		struct TransitionInfo
+		{
+			VkAccessFlags srcAccessMask;
+			VkAccessFlags dstAccessMask;
+			VkPipelineStageFlags sourceStage;
+			VkPipelineStageFlags destinationStage;
 		};
 
 		Image() = default;
@@ -56,6 +67,8 @@ namespace RUBY
 
 		void CopyBufferToImage(VkBuffer buffer, uint32_t width, uint32_t height) const;
 		void CreateImageView(VkFormat format, VkImageAspectFlags aspectFlags);
+
+		static TransitionInfo GetTransitionInfo(VkImageLayout oldLayout, VkImageLayout newLayout, VkFormat format);
 
 		VkFormat GetFormat() const { return m_Format; }
 

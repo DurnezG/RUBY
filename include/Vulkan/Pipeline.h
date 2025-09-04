@@ -1,5 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
+#include <vector>
 
 #include "Vulkan/DescriptorPool.h"
 #include "Vulkan/SwapChain.h"
@@ -12,6 +13,8 @@ namespace RUBY
     {
     public:
         Pipeline() = default;
+
+        // Note: renderingInfo is passed by value to ensure its lifetime for pipeline creation.
         Pipeline(Device* device,
             SwapChain* swapChain,
             DescriptorPool* descriptorPool,
@@ -24,7 +27,7 @@ namespace RUBY
             const VkPipelineDepthStencilStateCreateInfo& depthStencil,
             const VkPipelineColorBlendStateCreateInfo& colorBlending,
             const VkPipelineDynamicStateCreateInfo& dynamicState,
-            const VkPipelineRenderingCreateInfo& renderingInfo,
+            VkPipelineRenderingCreateInfo renderingInfo,
             const std::vector<VkPushConstantRange>& pushConstants);
 
         Pipeline(const Pipeline&) = delete;
@@ -67,6 +70,7 @@ namespace RUBY
         static PipelineBuilder CreateDefault(uint32_t width, uint32_t height);
 
     private:
+        // CreateInfo copies (the create-info structs will point to owned vectors below)
         std::vector<VkPipelineShaderStageCreateInfo> m_ShaderStages{};
         VkPipelineVertexInputStateCreateInfo m_VertexInput{};
         VkPipelineInputAssemblyStateCreateInfo m_InputAssembly{};
@@ -78,5 +82,12 @@ namespace RUBY
         VkPipelineDynamicStateCreateInfo m_DynamicState{};
         VkPipelineRenderingCreateInfo m_RenderingInfo{};
         std::vector<VkPushConstantRange> m_PushConstants{};
+
+        // Owned storage for arrays pointed to by create-info structs
+        std::vector<VkViewport> m_Viewports;
+        std::vector<VkRect2D> m_Scissors;
+        std::vector<VkPipelineColorBlendAttachmentState> m_ColorBlendAttachments;
+        std::vector<VkDynamicState> m_DynamicStates;
+        std::vector<VkFormat> m_ColorAttachmentFormats;
     };
 }
