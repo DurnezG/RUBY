@@ -21,13 +21,14 @@ namespace RUBY
 
 		uint32_t GetCurrentFrame() const { return m_CurrentFrame; }
 
+		bool BeginFrame(uint32_t& outImageIndex);
+		void RecordPasses(VkCommandBuffer& cmd, uint32_t& img);
+		void EndFrame(uint32_t imageIndex);
 		void Render();
 
 		//void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 	private:
-		bool BeginFrame(uint32_t& outImageIndex);
-		void EndFrame(uint32_t imageIndex);
 		void RecreateSwapChain();
 
 

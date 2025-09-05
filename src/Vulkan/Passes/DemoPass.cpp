@@ -20,9 +20,11 @@ namespace RUBY
 
     void DemoPass::Record(VkCommandBuffer cmd, uint32_t imageIndex)
     {
+		Image& currentImage = m_SwapChain->GetImages()[imageIndex];
+
         VkRenderingAttachmentInfoKHR colorAttachment{};
         colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-        colorAttachment.imageView = m_SwapChain->GetImages()[imageIndex].GetImageView();
+        colorAttachment.imageView = currentImage.GetImageView();
         colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -37,10 +39,14 @@ namespace RUBY
         renderingInfo.colorAttachmentCount = 1;
         renderingInfo.pColorAttachments = &colorAttachment;
 
+		currentImage.TransitionImageLayout(cmd, currentImage.GetFormat(), currentImage.GetImageLayout(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_2_NONE, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+
         vkCmdBeginRendering(cmd, &renderingInfo);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_Pipeline);
         vkCmdDraw(cmd, 3, 1, 0, 0);
         vkCmdEndRendering(cmd);
+
+		//currentImage.TransitionImageLayout(cmd, currentImage.GetFormat(), currentImage.GetImageLayout(), VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_2_NONE);
     }
 
     void DemoPass::Recreate(SwapChain* swapchain)

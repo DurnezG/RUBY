@@ -28,7 +28,7 @@ namespace RUBY
         VkSwapchainKHR GetSwapChain() const { return m_SwapChain; }
         VkExtent2D GetExtent() const { return m_SwapChainExtent; }
         VkFormat GetImageFormat() const { return m_SwapChainImageFormat; }
-        const std::vector<Image>& GetImages() const { return m_SwapChainImages; }
+        std::vector<Image>& GetImages() { return m_SwapChainImages; }
 
         // Sync accessors (per-frame)
         VkSemaphore& GetImageAvailableSemaphore(uint32_t frameIndex) { return m_ImageAvailableSemaphores.at(frameIndex); }

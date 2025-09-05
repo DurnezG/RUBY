@@ -28,7 +28,7 @@ namespace RUBY
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         vkBeginCommandBuffer(cmd, &beginInfo);
 
-        m_TrianglePass->Record(cmd, imageIndex);
+        RecordPasses(cmd, imageIndex);
 
         vkEndCommandBuffer(cmd);
         EndFrame(imageIndex);
@@ -57,6 +57,11 @@ namespace RUBY
 
         vkResetFences(m_Device.GetLogicalDevice(), 1, &m_SwapChain.GetInFlightFence(m_CurrentFrame));
         return true;
+    }
+
+    void RUBY::RecordPasses(VkCommandBuffer& cmd, uint32_t& img)
+    {
+        m_TrianglePass->Record(cmd, img);
     }
 
     void RUBY::EndFrame(uint32_t imageIndex)
